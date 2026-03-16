@@ -12,5 +12,8 @@ pydantic>=2.0.0
 # Load .env files for API keys
 python-dotenv>=1.0.0
 
+# Telegram bot interface
+python-telegram-bot>=20.0
+
 # Testing
 pytest>=8.0.0

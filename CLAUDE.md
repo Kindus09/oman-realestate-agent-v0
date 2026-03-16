@@ -17,20 +17,20 @@ using Claude function-calling tools to answer them.
 ## Architecture
 
 ```
-Scraper layer          →   Data layer            →   Agent layer
-─────────────────────────────────────────────────────────────────
+Scraper layer          →   Data layer            →   Agent layer          →   Interface layer
+────────────────────────────────────────────────────────────────────────────────────────────
 7 site scrapers        →   data/raw_listings.json
      ↓                          ↓
  runner.py             →   data_cleaner.py       →   data/clean_listings.json
                                                             ↓
                                                      agent/tools.py  (4 tools)
                                                             ↓
-                                                     agent/main.py   (CLI loop)
+                                                     agent/main.py   (CLI loop) ← python -m agent.main
                                                             ↓
                                                       Claude API
                                                       (tool_use)
                                                             ↓
-                                                        User
+                                                     bot/telegram_bot.py  ← Telegram users
 ```
 
 ### Scraper layer (`scraper/`)
@@ -73,6 +73,19 @@ Scraper layer          →   Data layer            →   Agent layer
 - `main.py` — CLI agentic loop. Loads data → initialises Claude client →
   runs the tool-use loop (up to 5 iterations per turn) → prints reply.
 
+### Bot layer (`bot/`)
+- `telegram_bot.py` — pure transport layer. Receives Telegram messages, passes
+  them to `run_agent_turn()` from `agent/main.py`, sends the reply back.
+  No agent logic lives here.
+- Uses `python-telegram-bot` v20+ (fully async, `Application` builder pattern).
+- Per-user conversation history stored in `USER_HISTORIES: dict[int, list[dict]]`
+  keyed by Telegram user_id. In-memory only — cleared on bot restart.
+- The synchronous Anthropic SDK call is wrapped in `asyncio.to_thread()` to
+  avoid blocking the async event loop.
+- Handles Telegram's 4096-char limit via `send_long_message()` + `_split_text()`.
+- Commands: `/start` (new session), `/help` (capabilities), `/clear` (reset history).
+- Run with: `python -m bot.telegram_bot` (requires `TELEGRAM_BOT_TOKEN` in `.env`)
+
 ### Config (`config/`)
 - `settings.py` — single source of truth for all magic values: site URLs,
   request delays, page limits, file paths, Claude model, area alias map.
@@ -95,11 +108,12 @@ Scraper layer          →   Data layer            →   Agent layer
 | HTML parsing | `beautifulsoup4` + `lxml` |
 | Data validation | `pydantic` v2 |
 | Claude API | `anthropic` SDK |
+| Telegram bot | `python-telegram-bot` v20+ |
 | Environment vars | `python-dotenv` |
 | Tests | `pytest` |
 | Python version | 3.14 (Windows) |
 
-No database, no web framework, no async. Data lives in flat JSON files.
+No database. Data lives in flat JSON files. Async only in the Telegram bot layer.
 
 ---
 
@@ -176,8 +190,11 @@ python -m scraper.runner
 # Clean
 python -m scraper.data_cleaner
 
-# Chat
+# Chat (CLI)
 python -m agent.main
+
+# Telegram bot
+python -m bot.telegram_bot   # requires TELEGRAM_BOT_TOKEN in .env
 
 # Tests
 python -m pytest tests/ -v
@@ -221,6 +238,16 @@ python -m pytest tests/ -v
 - The agentic loop in `main.py` is capped at 5 iterations per turn to prevent
   infinite loops. Do not remove this cap.
 - Keep `prompts.py` honest — only list tools and data sources that actually exist.
+
+### Bot layer
+- `bot/telegram_bot.py` is a transport layer only. Do not add agent logic here.
+  All reasoning stays in `agent/main.py`.
+- `USER_HISTORIES` is in-memory. Restoring or persisting history across restarts
+  requires a database — do not add persistence hacks to the dict.
+- The Anthropic SDK call must always run inside `asyncio.to_thread()`. Never
+  call synchronous blocking functions directly in an async handler.
+- `send_long_message()` handles Telegram's 4096-char limit. Do not bypass it.
+- `TELEGRAM_BOT_TOKEN` must live in `.env`, never in code or `.env.example`.
 
 ### Tests
 - Tests in `test_tools.py` inject fake listings via the `inject_listings`
