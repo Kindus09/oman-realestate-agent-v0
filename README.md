@@ -26,6 +26,8 @@ oman-realestate-agent-v0/
 │   ├── tools.py             # Tool functions + JSON schemas for Claude API
 │   ├── prompts.py           # System prompt (agent persona + instructions)
 │   └── main.py              # CLI chat loop
+├── bot/
+│   └── telegram_bot.py      # Telegram bot (transport layer only, reuses agent/main.py)
 ├── data/                    # JSON files land here (gitignored)
 ├── tests/
 ├── .env.example
@@ -41,11 +43,13 @@ oman-realestate-agent-v0/
 pip install -r requirements.txt
 ```
 
-### 2. Set your API key
+### 2. Set your API keys
 
 ```bash
 cp .env.example .env
-# Edit .env and add your ANTHROPIC_API_KEY
+# Edit .env and fill in:
+#   ANTHROPIC_API_KEY  — from console.anthropic.com
+#   TELEGRAM_BOT_TOKEN — from @BotFather on Telegram (only needed for the bot)
 ```
 
 ### 3. Run the scraper
@@ -66,9 +70,16 @@ python -m scraper.data_cleaner
 
 ### 5. Start chatting
 
+**CLI:**
 ```bash
 python -m agent.main
 ```
+
+**Telegram bot** (requires `TELEGRAM_BOT_TOKEN` in `.env`):
+```bash
+python -m bot.telegram_bot
+```
+Then open Telegram, find your bot, and send `/start`.
 
 Example questions you can ask:
 - "What are the cheapest 2-bedroom apartments for rent in Al Khuwair?"
